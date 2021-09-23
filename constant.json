@@ -1,0 +1,10 @@
+{
+    "goerli": {
+        "x_token": "0x2f85A194D8B5AD4EcBF89E1C2DB3e1a14dD5a5FD",
+        "y_token": "0x9C8883a4C5b2D4498A0BFC8F72fc68c5fd36E4D3",
+        "lp_tokens": "0x1098c9973D6c634A9A85676f9f5987391c3C646B",
+        "pos_lp_tokens": "0xc4F2917a27A8d9A4e00c06F5F42dcEe0F7DA4441",
+        "ufo_token": "0x2f85A194D8B5AD4EcBF89E1C2DB3e1a14dD5a5FD",
+        "pos_ufo_token": "0x737498DC74A20ECA50972F7FeCd766592865B5fD"
+    }
+}
