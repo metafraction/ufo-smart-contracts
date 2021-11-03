@@ -18,6 +18,7 @@ struct WithdrawalRequest {
 }
 
 struct Locked {
+  uint256 amount;
   uint256 weight;
   uint256 blockCount;
 }
@@ -31,6 +32,7 @@ contract Staking is AccessControl, ERC20 {
     uint256 public withdrawBufferTime;
 
     uint256 public startTime;
+    uint256 public totalWeightedLocked;
 
     IERC20Mintable public plasmaContract;
     IERC20 public lpToken;
@@ -85,26 +87,32 @@ contract Staking is AccessControl, ERC20 {
     function depositLpToken(address _to, uint256 _amount) public {
         require(_to != address(0), 'address can not be address(0)');
         require(_amount != 0, 'amount must be greater than 0');
+        require(lpToken.balanceOf(msg.sender) >= _amount, 'user balance must be greater than or equal to amount');
         lpToken.safeTransferFrom(msg.sender, address(this), _amount);
         _deposit(_to, _amount);
     }
 
-    function depositUfoLocked(uint256 month) public returns (bool) {
-        require(month == 1 || month == 3 || month == 9 || month == 21, 'month is not valid'); 
+    function depositUfoLocked(address _to, uint256 _amount, uint256 _month) public returns (bool) {
+        require(_month == 1 || _month == 3 || _month == 9 || _month == 21, 'month is not valid'); 
 
-        lockedDeposit[msg.sender].blockCount = block.number + blocksPerDay.mul(30).mul(month);
+        lockedDeposit[msg.sender].blockCount = block.number + blocksPerDay.mul(30).mul(_month);
+        lockedDeposit[msg.sender].amount = _amount; 
 
-        if(month == 1) {
+        if(_month == 1) {
           lockedDeposit[msg.sender].weight = 125;
-        } else if(month == 3) {
+        } else if(_month == 3) {
           lockedDeposit[msg.sender].weight = 150;
-        } else if(month == 9) {
+        } else if(_month == 9) {
           lockedDeposit[msg.sender].weight = 200;
-        } else if(month == 21) {
+        } else if(_month == 21) {
           lockedDeposit[msg.sender].weight = 300;
         }
 
-        emit DepositUfoLocked(msg.sender, month);
+        totalWeightedLocked += _amount.mul(lockedDeposit[msg.sender].weight);
+
+        depositLpToken(_to, _amount);
+
+        emit DepositUfoLocked(msg.sender, _month);
     }
 
     function withdrawLocked() public {
