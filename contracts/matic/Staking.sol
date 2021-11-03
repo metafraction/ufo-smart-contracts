@@ -157,13 +157,13 @@ contract Staking is AccessControl, ERC20 {
 
     // --- PUBLIC MODIFIER ---
 
+    function placeWithdrawRequest(uint256 _amount) public onlyIfAmountIsLeft(_amount) {
+        _withdrawRequest(msg.sender, _amount);
+    }
+
     function setPlasmaContract(address _plasmaContract) public onlyAdmin {
         plasmaContract = IERC20Mintable(_plasmaContract);
         emit SetPlasmaContract(_plasmaContract);
-    }
-
-    function placeWithdrawRequest(uint256 _amount) public onlyIfAmountIsLeft(_amount) {
-        _withdrawRequest(msg.sender, _amount);
     }
 
     // --- PUBLIC VIEW ---
@@ -181,6 +181,19 @@ contract Staking is AccessControl, ERC20 {
 
     // --- INTERNAL ---
 
+    function _deposit(address _to, uint256 _amount) internal {
+        Deposit memory _d = lastDeposit[_to];
+        _mintForExistingWeight(_d, _to);
+
+        lastDeposit[_to] = Deposit(_d.amount.add(_amount), block.timestamp);
+        lpTokensLocked[_to] = lpTokensLocked[_to].add(_amount);
+
+        totalLpTokensLockedInThisContract = totalLpTokensLockedInThisContract.add(_amount);
+        totalLpTokenLockedInThisContractLastUpdatedAt = block.timestamp;
+
+        emit DepositLpTokens(_to, _amount);
+    }
+
     function _mintForExistingWeight(Deposit memory _d, address _to) internal {
         uint256 _existingWeight = _d.amount.mul(block.timestamp.sub(_d.lastUpdated));
         uint256 _existingTotalWeight = (totalLpTokensLockedInThisContract.sub(totalLpTokensInWithdrawlRequestsInThisContract))
@@ -194,19 +207,6 @@ contract Staking is AccessControl, ERC20 {
         if (_existingTotalWeight != 0) {
             _mint(eeee, _existingTotalWeight);
         }
-    }
-
-    function _deposit(address _to, uint256 _amount) internal {
-        Deposit memory _d = lastDeposit[_to];
-        _mintForExistingWeight(_d, _to);
-
-        lastDeposit[_to] = Deposit(_d.amount.add(_amount), block.timestamp);
-        lpTokensLocked[_to] = lpTokensLocked[_to].add(_amount);
-
-        totalLpTokensLockedInThisContract = totalLpTokensLockedInThisContract.add(_amount);
-        totalLpTokenLockedInThisContractLastUpdatedAt = block.timestamp;
-
-        emit DepositLpTokens(_to, _amount);
     }
 
     function _withdraw(uint256 _requestCount, address _to) internal {
