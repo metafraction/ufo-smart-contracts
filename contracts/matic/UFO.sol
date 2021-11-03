@@ -5,7 +5,6 @@ import '@openzeppelin/contracts/token/ERC721/ERC721.sol';
 import '@openzeppelin/contracts/token/ERC721/ERC721Burnable.sol';
 import '@openzeppelin/contracts/token/ERC721/ERC721Holder.sol';
 import '@openzeppelin/contracts/token/ERC721/ERC721Pausable.sol';
-import '@openzeppelin/contracts/access/AccessControl.sol';
 import './interfaces/IERC20Burnable.sol';
 import './interfaces/IERC20Mintable.sol';
 import './UFOStorage.sol';
@@ -34,8 +33,11 @@ contract UFO is ERC721, ERC721Burnable, ERC721Holder, UFOStorage {
     mapping(uint256 => UfoDetails) public ufoStore;
 
     uint256 public totalNumberOfUFOs;
-    IERC20Burnable plasmaContract;
-    IERC20Mintable uapContract;
+    IERC20Burnable public plasmaContract;
+    IERC20Mintable public uapContract;
+
+    uint256 constant totalNumberOfGenesisNfts = 9;
+    uint256 public numberOfGenesisNfts = 0;
 
     uint256 costUfoEp = uint256(1000).mul(10**18);
 
@@ -68,13 +70,15 @@ contract UFO is ERC721, ERC721Burnable, ERC721Holder, UFOStorage {
         emit SetUapContract(_uapContract);
     }
 
-    function CreateOrigin() public {
+    function MintGenesis() public {
+        require(numberOfGenesisNfts <= totalNumberOfGenesisNfts.sub(1), 'Only 9 Genesis NFT can me minted');
+        numberOfGenesisNfts = numberOfGenesisNfts.add(1);
         plasmaContract.burnFrom(msg.sender, costUfoEp);
         totalNumberOfUFOs = totalNumberOfUFOs.add(1);
 
         uint256 init_ratings = uint256(100000).add(_getRandomness() % 100000);
 
-        UfoDetails memory ufo = _generateUfoWithRandomFeatures(totalNumberOfUFOs, init_ratings);
+        UfoDetails memory ufo = _generateGeneisNFT(totalNumberOfUFOs, init_ratings);
         ufo.ufoType = UfoType.origin;
         ufoStore[totalNumberOfUFOs] = ufo;
         _safeMint(msg.sender, totalNumberOfUFOs);
@@ -172,6 +176,26 @@ contract UFO is ERC721, ERC721Burnable, ERC721Holder, UFOStorage {
         emit UnpauseRatingUdpate(id);
     }
 
+    function _generateGeneisNFT(uint256 id, uint256 init_rating) internal view returns (UfoDetails memory _ufo) {
+        require(featureCounts != 0, 'Cannot generate UFO if features count is 0');
+        _ufo.id = id;
+        _ufo.rating = init_rating;
+        _ufo.features = new uint256[](featureCounts);
+        _ufo.values = new uint256[](featureCounts);
+        _ufo.lastUpdated = block.timestamp;
+        uint256 randomness = _getRandomness();
+        for (uint256 index = 1; index <= featureCounts; index++) {
+            require(possibilityCount[index] != 0, 'Cannot generate UFO if possibility count is 0');
+            _ufo.features[index.sub(1)] = index;
+            _ufo.values[index.sub(1)] = numberOfGenesisNfts;
+        }
+
+        // @test: only for testing
+        if (randomness % 10 == 0) {
+            _ufo.special = true;
+        }
+    }
+
     function _generateUfoWithRandomFeatures(uint256 id, uint256 init_rating) internal view returns (UfoDetails memory _ufo) {
         require(featureCounts != 0, 'Cannot generate UFO if features count is 0');
         _ufo.id = id;
@@ -210,7 +234,6 @@ contract UFO is ERC721, ERC721Burnable, ERC721Holder, UFOStorage {
         emit ClaimUap(id, to, ufoStore[id].unclaimedUap);
         ufoStore[id].unclaimedUap = 0;
     }
-
 
     // @modify: find a way to get randomness from chainlink oracle
     function _getRandomness() internal view returns (uint256) {

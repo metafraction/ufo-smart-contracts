@@ -25,7 +25,10 @@ contract UFOStorage is AccessControl {
     bytes32 public constant ADMIN = keccak256('ADMIN');
     bytes32 public constant GAME_SERVER = keccak256('GAME SERVER');
     bytes32 public constant BREEDER = keccak256('BREEDER');
+
     address public admin;
+    address public breeder;
+    address public gameServer;
 
     constructor(
         address _admin,
@@ -33,6 +36,9 @@ contract UFOStorage is AccessControl {
         address _breeder
     ) {
         admin = _admin;
+        breeder = _breeder;
+        gameServer = _gameServer;
+
         _setupRole(ADMIN, _admin);
         _setupRole(GAME_SERVER, _gameServer);
         _setupRole(BREEDER, _breeder);
