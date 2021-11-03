@@ -17,11 +17,17 @@ struct WithdrawalRequest {
     uint256 releaseTime;
 }
 
+struct Locked {
+  uint256 weight;
+  uint256 blockCount;
+}
+
 contract Staking is AccessControl, ERC20 {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
 
     bytes32 public constant ADMIN = keccak256('ADMIN');
+    uint256 public constant blocksPerDay = 6300;
     uint256 public withdrawBufferTime;
 
     uint256 public startTime;
@@ -34,8 +40,9 @@ contract Staking is AccessControl, ERC20 {
     mapping(address => uint256) public totalLpTokensInWithdrawlRequests;
     mapping(address => uint256) public withdrawRequestCount;
     mapping(address => mapping(uint256 => WithdrawalRequest)) public withdrawRequests;
-
     mapping(uint256 => uint256) maxRewardPerMonth;
+    mapping(address => Locked) public lockedDeposit;
+    mapping(address => uint256) public totalUserDeposited;
 
     uint256 public totalLpTokensLockedInThisContract;
     uint256 public totalLpTokenLockedInThisContractLastUpdatedAt;
@@ -62,8 +69,10 @@ contract Staking is AccessControl, ERC20 {
 
     event SetPlasmaContract(address indexed _plasmaContract);
     event DepositLpTokens(address indexed _to, uint256 _amount);
+    event DepositUfoLocked(address indexed _from, uint256 indexed _month);
     event WithdrawlRequestForLpTokens(address indexed _from, uint256 _requestCount, uint256 _amount);
     event Withdraw(address indexed _from, address to, uint256 _requestCount, uint256 _amount);
+    event WithdrawLocked(address indexed _to, uint256 _amount);
     event AddPlamsa(uint256 _amount);
     event ClaimPlasma(address indexed _to, uint256 amount);
     event UpdatePlasmaPointsForMonth(uint256 indexed _month, uint256 points);
@@ -78,6 +87,38 @@ contract Staking is AccessControl, ERC20 {
         require(_amount != 0, 'amount must be greater than 0');
         lpToken.safeTransferFrom(msg.sender, address(this), _amount);
         _deposit(_to, _amount);
+    }
+
+    function depositUfoLocked(uint256 month) public returns (bool) {
+        require(month == 1 || month == 3 || month == 9 || month == 21, 'month is not valid'); 
+
+        lockedDeposit[msg.sender].blockCount = block.number + blocksPerDay.mul(30).mul(month);
+
+        if(month == 1) {
+          lockedDeposit[msg.sender].weight = 125;
+        } else if(month == 3) {
+          lockedDeposit[msg.sender].weight = 150;
+        } else if(month == 9) {
+          lockedDeposit[msg.sender].weight = 200;
+        } else if(month == 21) {
+          lockedDeposit[msg.sender].weight = 300;
+        }
+
+        emit DepositUfoLocked(msg.sender, month);
+    }
+
+    function withdrawLocked() public {
+        require(block.number >= lockedDeposit[msg.sender].blockCount, 'locking period still in progress');
+
+        uint256 reward = 0;
+
+        //uint256 reward = lockedDeposit[msg.sender].weight; // divide by 100
+        uint256 amount = totalUserDeposited[msg.sender] + reward;
+        lpToken.safeTransferFrom(address(this), msg.sender, amount);
+
+        totalUserDeposited[msg.sender] = 0;
+
+        emit WithdrawLocked(msg.sender, amount);
     }
 
     function _mintForExistingWeight(Deposit memory _d, address _to) internal {
@@ -103,6 +144,8 @@ contract Staking is AccessControl, ERC20 {
 
         totalLpTokensLockedInThisContract = totalLpTokensLockedInThisContract.add(_amount);
         totalLpTokenLockedInThisContractLastUpdatedAt = block.timestamp;
+  
+        totalUserDeposited[msg.sender] += _amount;
 
         emit DepositLpTokens(_to, _amount);
     }
