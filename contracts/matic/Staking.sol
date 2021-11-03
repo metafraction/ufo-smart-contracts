@@ -43,8 +43,8 @@ contract Staking is AccessControl, ERC20 {
     mapping(address => uint256) public withdrawRequestCount;
     mapping(address => mapping(uint256 => WithdrawalRequest)) public withdrawRequests;
     mapping(uint256 => uint256) maxRewardPerMonth;
-    mapping(address => Locked) public lockedDeposit;
-    mapping(address => uint256) public totalUserDeposited;
+    mapping(address => Locked[]) public lockedDeposit;
+    mapping(address => uint256) public lockedDepositIndex;
 
     uint256 public totalLpTokensLockedInThisContract;
     uint256 public totalLpTokenLockedInThisContractLastUpdatedAt;
@@ -95,20 +95,22 @@ contract Staking is AccessControl, ERC20 {
     function depositUfoLocked(address _to, uint256 _amount, uint256 _month) public returns (bool) {
         require(_month == 1 || _month == 3 || _month == 9 || _month == 21, 'month is not valid'); 
 
-        lockedDeposit[msg.sender].blockCount = block.number + blocksPerDay.mul(30).mul(_month);
-        lockedDeposit[msg.sender].amount = _amount; 
+        uint256 weight;
+        uint256 blockCount = block.number + blocksPerDay.mul(30).mul(_month);
 
         if(_month == 1) {
-          lockedDeposit[msg.sender].weight = 125;
+          weight = 125;
         } else if(_month == 3) {
-          lockedDeposit[msg.sender].weight = 150;
+          weight = 150;
         } else if(_month == 9) {
-          lockedDeposit[msg.sender].weight = 200;
+          weight = 200;
         } else if(_month == 21) {
-          lockedDeposit[msg.sender].weight = 300;
+          weight = 300;
         }
 
-        totalWeightedLocked += _amount.mul(lockedDeposit[msg.sender].weight);
+        totalWeightedLocked += _amount.mul(weight);
+
+        lockedDeposit[msg.sender].push(Locked(_amount, weight, blockCount));
 
         depositLpToken(_to, _amount);
 
@@ -116,17 +118,21 @@ contract Staking is AccessControl, ERC20 {
     }
 
     function withdrawLocked() public {
-        require(block.number >= lockedDeposit[msg.sender].blockCount, 'locking period still in progress');
+        uint256 withdrawAmount;
+        uint256 startIndex = lockedDepositIndex[msg.sender];
 
-        uint256 reward = 0;
+        for(uint256 i = startIndex; i < lockedDeposit[msg.sender].length; i++) {
+          Locked memory deposit = lockedDeposit[msg.sender][i];
+          if(block.number >= deposit.blockCount) {
+            withdrawAmount += deposit.amount.div(totalWeightedLocked).mul(possibleTotalPlasmaPoints);
+            totalWeightedLocked -= deposit.amount;
+            lockedDepositIndex[msg.sender]++;
+          }
+        }
 
-        //uint256 reward = lockedDeposit[msg.sender].weight; // divide by 100
-        uint256 amount = totalUserDeposited[msg.sender] + reward;
-        lpToken.safeTransferFrom(address(this), msg.sender, amount);
+        lpToken.safeTransferFrom(address(this), msg.sender, withdrawAmount);
 
-        totalUserDeposited[msg.sender] = 0;
-
-        emit WithdrawLocked(msg.sender, amount);
+        emit WithdrawLocked(msg.sender, withdrawAmount);
     }
 
     function _mintForExistingWeight(Deposit memory _d, address _to) internal {
@@ -153,8 +159,6 @@ contract Staking is AccessControl, ERC20 {
         totalLpTokensLockedInThisContract = totalLpTokensLockedInThisContract.add(_amount);
         totalLpTokenLockedInThisContractLastUpdatedAt = block.timestamp;
   
-        totalUserDeposited[msg.sender] += _amount;
-
         emit DepositLpTokens(_to, _amount);
     }
 
