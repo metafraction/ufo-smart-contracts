@@ -12,6 +12,8 @@ import 'hardhat-deploy';
 import 'hardhat-tracer';
 import 'hardhat-log-remover';
 
+import 'hardhat-gas-reporter';
+
 import { task } from 'hardhat/config';
 import { HardhatUserConfig } from 'hardhat/types';
 
@@ -53,7 +55,7 @@ const config: HardhatUserConfig = {
             // hardfork: "istanbul",
             forking: {
                 url: 'https://eth-mainnet.alchemyapi.io/v2/snGskhAXMQaRLnJaxbcfOL7U5_bSZl_Y',
-                blockNumber: 12869777,
+                blockNumber: 13316038,
             },
             blockGasLimit: 12500000,
             accounts: getHardhatPrivateKeys(),
@@ -196,6 +198,14 @@ const config: HardhatUserConfig = {
     },
     etherscan: {
         apiKey: etherscanKey,
+    },
+    gasReporter: {
+        gasPrice: 30,
+        enabled: true,
+        currency: 'USD',
+        coinmarketcap: 'c40041ca-81fa-4564-8f95-175e388534c1',
+        outputFile: 'gasReport.md',
+        noColors: true,
     },
 };
 

@@ -4,6 +4,9 @@ import { Staking__factory } from '../../typechain/factories/Staking__factory';
 import { Plasma } from '../../typechain/Plasma';
 import { Plasma__factory } from '../../typechain/factories/Plasma__factory';
 import { UFO } from '../../typechain/UFO';
+import { Weapons } from '../../typechain/Weapons';
+
+import { Weapons__factory } from '../../typechain/factories/Weapons__factory';
 import { UFO__factory } from '../../typechain/factories/UFO__factory';
 import { Breeder } from '../../typechain/Breeder';
 import { Breeder__factory } from '../../typechain/factories/Breeder__factory';
@@ -14,6 +17,14 @@ export default class DeployMaticContracts {
 
     constructor(deployerSigner: Signer) {
         this._deployerSigner = deployerSigner;
+    }
+
+    public async deployWeapons(admin: string, gameServer: string): Promise<Weapons> {
+        return new Weapons__factory(this._deployerSigner).deploy(admin, gameServer);
+    }
+
+    public async getWeapons(contractAddress: string): Promise<Weapons> {
+        return new Weapons__factory(this._deployerSigner).attach(contractAddress);
     }
 
     public async deployStaking(admin: string, lpToken: string, withdrawBufferTime: BigNumberish): Promise<Staking> {

@@ -17,7 +17,7 @@ import { Breeder } from '../typechain/Breeder';
 import { blocksTravel, timeTravel } from '../utils/helper';
 import { UAP } from '../typechain/UAP';
 
-describe.only('Check and update UFO ratings, UAP tokens', () => {
+describe('Check and update UFO ratings, UAP tokens', () => {
     // create lp tokens before that
 
     let lptoken1: ERC20;
@@ -90,17 +90,17 @@ describe.only('Check and update UFO ratings, UAP tokens', () => {
 
     async function registerPossilibities() {
         let possibility = [
-            ['Red', 'Black', 'Green', 'Pink'],
-            ['Red', 'Black', 'Green', 'Pink'],
-            ['Red', 'Black', 'Green', 'Pink'],
-            ['Red', 'Black', 'Green', 'Pink'],
-            ['Red', 'Black', 'Green', 'Pink'],
-            ['Red', 'Black', 'Green', 'Pink'],
-            ['Red', 'Black', 'Green', 'Pink'],
-            ['Red', 'Black', 'Green', 'Pink'],
-            ['Red', 'Black', 'Green', 'Pink'],
-            ['Red', 'Black', 'Green', 'Pink'],
-            ['Red', 'Black', 'Green', 'Pink'],
+            ['One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven'],
+            ['One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven'],
+            ['One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven'],
+            ['One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven'],
+            ['One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven'],
+            ['One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven'],
+            ['One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven'],
+            ['One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven'],
+            ['One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven'],
+            ['One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven'],
+            ['One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven'],
         ];
 
         for (let index = 0; index < possibility.length; index++) {
@@ -137,10 +137,10 @@ describe.only('Check and update UFO ratings, UAP tokens', () => {
             let amountToApprove = BigNumber.from(10000).mul(BigNumber.from(10).pow(18));
 
             await plasma.connect(admin).approve(ufo.address, amountToApprove);
-            await ufo.connect(admin).CreateOrigin();
+            await ufo.connect(admin).MintGenesis();
             ufo1ForBreeding = await ufo.totalNumberOfUFOs();
 
-            await ufo.connect(admin).CreateOrigin();
+            await ufo.connect(admin).MintGenesis();
             ufo2ForBreeding = await ufo.totalNumberOfUFOs();
 
             await breeder.connect(admin).setUfoContract(ufo.address);
@@ -162,10 +162,10 @@ describe.only('Check and update UFO ratings, UAP tokens', () => {
 
         it('Print All UFOs available', async () => {
             console.log({ ufo1ForBreeding, ufo2ForBreeding, childUfo });
-            console.log({ ufo1ForBreedingFeatures: await ufo.getUfoFeatures(ufo1ForBreeding) });
-            console.log({ ufo2ForBreedingValues: await ufo.getUfoValues(ufo2ForBreeding) });
-            console.log({ childUfo: await ufo.getOtherUfoDetails(childUfo) });
-            console.log({ childUfo: await ufo.ufoStore(childUfo) });
+            console.log({ ufo1ForBreedingFeatures: await (await ufo.getUfoFeatures(ufo1ForBreeding)).map((a) => a.toString()) });
+            console.log({ ufo2ForBreedingValues: await (await ufo.getUfoValues(ufo2ForBreeding)).map((a) => a.toString()) });
+            console.log({ childUfo: await (await ufo.getOtherUfoDetails(childUfo)).map((a) => a.toString()) });
+            console.log({ childUfo: await (await ufo.ufoStore(childUfo)).map((a) => a.toString()) });
         });
 
         it('Increase the ratings of UFO', async () => {

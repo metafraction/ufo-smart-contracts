@@ -104,17 +104,17 @@ describe('Generate and Update UFO', async () => {
 
     async function registerPossilibities() {
         let possibility = [
-            ['Red', 'Black', 'Green', 'Pink'],
-            ['Red', 'Black', 'Green', 'Pink'],
-            ['Red', 'Black', 'Green', 'Pink'],
-            ['Red', 'Black', 'Green', 'Pink'],
-            ['Red', 'Black', 'Green', 'Pink'],
-            ['Red', 'Black', 'Green', 'Pink'],
-            ['Red', 'Black', 'Green', 'Pink'],
-            ['Red', 'Black', 'Green', 'Pink'],
-            ['Red', 'Black', 'Green', 'Pink'],
-            ['Red', 'Black', 'Green', 'Pink'],
-            ['Red', 'Black', 'Green', 'Pink'],
+            ['One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven'],
+            ['One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven'],
+            ['One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven'],
+            ['One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven'],
+            ['One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven'],
+            ['One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven'],
+            ['One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven'],
+            ['One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven'],
+            ['One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven'],
+            ['One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven'],
+            ['One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven'],
         ];
 
         for (let index = 0; index < possibility.length; index++) {
@@ -165,10 +165,10 @@ describe('Generate and Update UFO', async () => {
             let amountToApprove = BigNumber.from(10000).mul(BigNumber.from(10).pow(18));
 
             await plasma.connect(admin).approve(ufo.address, amountToApprove);
-            await ufo.connect(admin).CreateOrigin();
+            await ufo.connect(admin).MintGenesis();
             ufo1ForBreeding = await ufo.totalNumberOfUFOs();
 
-            await ufo.connect(admin).CreateOrigin();
+            await ufo.connect(admin).MintGenesis();
             ufo2ForBreeding = await ufo.totalNumberOfUFOs();
 
             await breeder.connect(admin).setUfoContract(ufo.address);
@@ -210,11 +210,24 @@ describe('Generate and Update UFO', async () => {
             await ufo.connect(admin).setPlasmaContract(plasma.address);
         });
 
+        it('Cannot Generate more than 9 origin NFTs', async () => {
+            let updatedRewardPerMonth = BigNumber.from(550000).mul(BigNumber.from(10).pow(18));
+            await updatePlasmaReward(admin, updatedRewardPerMonth);
+
+            let amountToApprove = BigNumber.from(1000000).mul(BigNumber.from(10).pow(18));
+            await plasma.connect(admin).approve(ufo.address, amountToApprove);
+
+            for (let index = 0; index < 9; index++) {
+                await ufo.connect(admin).MintGenesis();
+            }
+            await expect(ufo.connect(admin).MintGenesis()).to.be.revertedWith('Only 9 Genesis NFT can me minted');
+        });
+
         it('Trying to generate UFO', async () => {
             let amountToApprove = BigNumber.from(10000).mul(BigNumber.from(10).pow(18));
 
             await plasma.connect(admin).approve(ufo.address, amountToApprove);
-            await ufo.connect(admin).CreateOrigin();
+            await ufo.connect(admin).MintGenesis();
             let latestUfoId = await ufo.totalNumberOfUFOs();
             console.log({
                 ufoFeatures: (await ufo.getUfoFeatures(latestUfoId)).map((a) => a.toString()),
@@ -226,12 +239,12 @@ describe('Generate and Update UFO', async () => {
             let amountToApprove = BigNumber.from(10000).mul(BigNumber.from(10).pow(18));
 
             await plasma.connect(admin).approve(ufo.address, amountToApprove);
-            await ufo.connect(admin).CreateOrigin();
+            await ufo.connect(admin).MintGenesis();
             let latestUfoId = await ufo.totalNumberOfUFOs();
-            let valuesBefore = await ufo.getUfoValues(latestUfoId);
+            let valuesBefore = await (await ufo.getUfoValues(latestUfoId)).map((a) => a.toString());
 
             await ufo.connect(gameServer).updateSingleUfo(latestUfoId, [1], [1]);
-            let valuesAfter = await ufo.getUfoValues(latestUfoId);
+            let valuesAfter = await (await ufo.getUfoValues(latestUfoId)).map((a) => a.toString());
 
             console.log({ valuesBefore, valuesAfter });
         });
@@ -240,10 +253,10 @@ describe('Generate and Update UFO', async () => {
             let amountToApprove = BigNumber.from(10000).mul(BigNumber.from(10).pow(18));
             await plasma.connect(admin).approve(ufo.address, amountToApprove);
 
-            await ufo.connect(admin).CreateOrigin();
+            await ufo.connect(admin).MintGenesis();
             let firstUfoId = await ufo.totalNumberOfUFOs();
 
-            await ufo.connect(admin).CreateOrigin();
+            await ufo.connect(admin).MintGenesis();
             let secondUfoId = await ufo.totalNumberOfUFOs();
 
             await ufo.connect(gameServer).updateMultipleUfo(
@@ -258,8 +271,8 @@ describe('Generate and Update UFO', async () => {
                 ]
             );
 
-            let valuesAfterFor1stUfo = await ufo.getUfoValues(firstUfoId);
-            let valuesAfterFor2ndUfo = await ufo.getUfoValues(secondUfoId);
+            let valuesAfterFor1stUfo = await (await ufo.getUfoValues(firstUfoId)).map((a) => a.toString());
+            let valuesAfterFor2ndUfo = await (await ufo.getUfoValues(secondUfoId)).map((a) => a.toString());
             console.log({ valuesAfterFor1stUfo, valuesAfterFor2ndUfo });
         });
     });

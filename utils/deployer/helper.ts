@@ -14,6 +14,9 @@ import { IUniswapV2Factory__factory } from '../../typechain/factories/IUniswapV2
 import { IUniswapV2Pair__factory } from '../../typechain/factories/IUniswapV2Pair__factory';
 import { IUniswapV2Router02__factory } from '../../typechain/factories/IUniswapV2Router02__factory';
 
+import { IlockTokens } from '../../typechain/IlockTokens';
+import { IlockTokens__factory } from '../../typechain/factories/IlockTokens__factory';
+
 import { Address } from 'hardhat-deploy/dist/types';
 
 export default class DeployHelperContracts {
@@ -21,6 +24,10 @@ export default class DeployHelperContracts {
 
     constructor(deployerSigner: Signer) {
         this._deployerSigner = deployerSigner;
+    }
+
+    public async getIlockToken(contractAddress: Address): Promise<IlockTokens> {
+        return await IlockTokens__factory.connect(contractAddress, this._deployerSigner);
     }
 
     public async getUniswapV2Router02(uniswapV2Router02: Address): Promise<IUniswapV2Router02> {

@@ -106,17 +106,17 @@ async function registerFeatures(ufo: UFO, admin: SignerWithAddress) {
 
 async function registerPossilibities(ufo: UFO, admin: SignerWithAddress) {
     let possibility = [
-        ['Red', 'Black', 'Green', 'Pink'],
-        ['Red', 'Black', 'Green', 'Pink'],
-        ['Red', 'Black', 'Green', 'Pink'],
-        ['Red', 'Black', 'Green', 'Pink'],
-        ['Red', 'Black', 'Green', 'Pink'],
-        ['Red', 'Black', 'Green', 'Pink'],
-        ['Red', 'Black', 'Green', 'Pink'],
-        ['Red', 'Black', 'Green', 'Pink'],
-        ['Red', 'Black', 'Green', 'Pink'],
-        ['Red', 'Black', 'Green', 'Pink'],
-        ['Red', 'Black', 'Green', 'Pink'],
+        ['One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven'],
+        ['One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven'],
+        ['One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven'],
+        ['One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven'],
+        ['One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven'],
+        ['One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven'],
+        ['One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven'],
+        ['One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven'],
+        ['One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven'],
+        ['One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven'],
+        ['One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven'],
     ];
 
     for (let index = 0; index < possibility.length; index++) {
