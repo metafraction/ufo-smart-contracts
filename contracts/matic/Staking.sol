@@ -63,7 +63,8 @@ contract Staking is AccessControl, ERC20 {
     event SetPlasmaContract(address indexed _plasmaContract);
     event UpdatePlasmaPointsForMonth(uint256 indexed _month, uint256 points);
     event Withdraw(address indexed _from, address to, uint256 _requestCount, uint256 _amount);
-    event WithdrawLocked(address indexed _to, uint256 _amount);
+    event WithdrawAmount(address indexed _to, uint256 _amount);
+    event WithdrawReward(address indexed _to, uint256 _amount);
     event WithdrawlRequestForLpTokens(address indexed _from, uint256 _requestCount, uint256 _amount);
 
     constructor(
@@ -117,6 +118,10 @@ contract Staking is AccessControl, ERC20 {
         _deposit(_to, _amount);
     }
 
+    /**
+     * @dev deposit ufo token with a locking period, set blockCount to minimum unlocking period,
+     * set weight based on month, push locking period into lockedDeposit mapping, and call depositLpToken
+     */
     function depositUfoLocked(address _to, uint256 _amount, uint256 _month) public returns (bool) {
         require(_month == 1 || _month == 3 || _month == 9 || _month == 21, 'month is not valid');
         uint256 weight;
@@ -138,21 +143,45 @@ contract Staking is AccessControl, ERC20 {
         _withdraw(_requestCount, _to);
     }
 
-    function withdrawLocked() public {
+    /**
+     * @dev withdraw the orignal amount that was staked after the locking period is over, also account for when
+     * multiple deposit transactions take place
+     */
+    function withdrawAmount() public {
         uint256 withdrawAmount;
         uint256 startIndex = lockedDepositIndex[msg.sender];
 
         for (uint256 i = startIndex; i < lockedDeposit[msg.sender].length; i++) {
             Locked memory deposit = lockedDeposit[msg.sender][i];
             if (block.number >= deposit.blockCount) {
-                withdrawAmount += deposit.amount.div(totalWeightedLocked).mul(possibleTotalPlasmaPoints);
+                withdrawAmount += deposit.amount;
                 totalWeightedLocked -= deposit.amount;
                 lockedDepositIndex[msg.sender]++;
             }
         }
 
         lpToken.safeTransferFrom(address(this), msg.sender, withdrawAmount);
-        emit WithdrawLocked(msg.sender, withdrawAmount);
+        emit WithdrawAmount(msg.sender, withdrawAmount);
+    }
+
+    /**
+     * @dev withdraw the reward amount that is accumulated after locking period, also account for when multiple
+     * deposit transactions take place
+     */
+    function withdrawReward() public {
+        uint256 rewardAmount;
+        uint256 startIndex = lockedDepositIndex[msg.sender];
+
+        for (uint256 i = startIndex; i < lockedDeposit[msg.sender].length; i++) {
+            Locked memory deposit = lockedDeposit[msg.sender][i];
+            if (block.number >= deposit.blockCount) {
+                rewardAmount += deposit.amount.div(totalWeightedLocked);
+                lockedDepositIndex[msg.sender]++;
+            }
+        }
+
+        //plasmaContract.safeTransferFrom(address(this), msg.sender, rewardAmount);
+        emit WithdrawReward(msg.sender, rewardAmount);
     }
 
     // --- PUBLIC MODIFIER ---
