@@ -53,7 +53,7 @@ contract Staking is AccessControl, ERC20 {
     mapping(address => mapping(uint256 => WithdrawalRequest)) public withdrawRequests;
 
     // @modify: modify with a proper variable name. the addresses should be a random
-    address eeee = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
+    address deadAccount = 0x000000000000000000000000000000000000dEaD;
 
     // Events
     event AddPlamsa(uint256 _amount);
@@ -70,10 +70,12 @@ contract Staking is AccessControl, ERC20 {
     constructor(
         address _admin,
         address _lpToken,
+        address _plasmaContract,
         uint256 _withdrawBufferTime
     ) ERC20('Staking Shares', 'SHRS') {
         _setupRole(ADMIN, _admin);
         lpToken = IERC20(_lpToken);
+        plasmaContract = IERC20Mintable(_plasmaContract);
         startTime = block.timestamp;
         withdrawBufferTime = _withdrawBufferTime.mul(1 days);
         totalLpTokenLockedInThisContractLastUpdatedAt = block.timestamp;
@@ -97,15 +99,18 @@ contract Staking is AccessControl, ERC20 {
     function claimPlasma(address _to) public {
         _deposit(msg.sender, 0);
         uint256 _currentBalance = balanceOf(msg.sender);
-        uint256 possiblePlasmaPossible = possiblePlasmaPointsCurrentMonth();
-        uint256 plasmaToGenerate = (possiblePlasmaPossible.sub(plasmaClaimedTillNow)).mul(_currentBalance).div(balanceOf(eeee));
-        require(possiblePlasmaPossible >= plasmaClaimedTillNow.add(plasmaToGenerate), "Can't mint more than current month permits");
+        uint256 possiblePlasmaPoints = possiblePlasmaPointsCurrentMonth();
+        uint256 plasmaToGenerate = (possiblePlasmaPoints.sub(plasmaClaimedTillNow)).mul(_currentBalance).div(balanceOf(deadAccount));
+        // A = possiblePlasmaPoints - plasmaClaimedTillNow; 
+        // B = A * currentBalance;
+        // C = B / balanceOf(deadAccount);
+        require(possiblePlasmaPoints >= plasmaClaimedTillNow.add(plasmaToGenerate), "Can't mint more than current month permits");
 
         plasmaClaimedTillNow = plasmaClaimedTillNow.add(plasmaToGenerate);
         plasmaContract.mint(_to, plasmaToGenerate);
 
         _burn(msg.sender, _currentBalance);
-        _burn(eeee, _currentBalance);
+        _burn(deadAccount, _currentBalance);
         emit ClaimPlasma(_to, plasmaToGenerate);
     }
 
@@ -148,20 +153,20 @@ contract Staking is AccessControl, ERC20 {
      * multiple deposit transactions take place
      */
     function withdrawAmount() public {
-        uint256 withdrawAmount;
+        uint256 lockedAmount;
         uint256 startIndex = lockedDepositIndex[msg.sender];
 
         for (uint256 i = startIndex; i < lockedDeposit[msg.sender].length; i++) {
             Locked memory deposit = lockedDeposit[msg.sender][i];
             if (block.number >= deposit.blockCount) {
-                withdrawAmount += deposit.amount;
+                lockedAmount += deposit.amount;
                 totalWeightedLocked -= deposit.amount;
                 lockedDepositIndex[msg.sender]++;
             }
         }
 
-        lpToken.safeTransferFrom(address(this), msg.sender, withdrawAmount);
-        emit WithdrawAmount(msg.sender, withdrawAmount);
+        lpToken.safeTransferFrom(address(this), msg.sender, lockedAmount);
+        emit WithdrawAmount(msg.sender, lockedAmount);
     }
 
     /**
@@ -180,7 +185,7 @@ contract Staking is AccessControl, ERC20 {
             }
         }
 
-        //plasmaContract.safeTransferFrom(address(this), msg.sender, rewardAmount);
+        plasmaContract.transferFrom(address(this), msg.sender, rewardAmount);
         emit WithdrawReward(msg.sender, rewardAmount);
     }
 
@@ -234,7 +239,7 @@ contract Staking is AccessControl, ERC20 {
         }
 
         if (_existingTotalWeight != 0) {
-            _mint(eeee, _existingTotalWeight);
+            _mint(deadAccount, _existingTotalWeight);
         }
     }
 
