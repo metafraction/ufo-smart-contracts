@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Unlicense
 pragma solidity >= 0.6.0 < 0.8.0;
 
 import '@openzeppelin/contracts/math/SafeMath.sol';
@@ -14,7 +15,8 @@ struct Deposit {
 
 struct Locked {
     uint256 amount;
-    uint256 blockCount;
+    uint256 startDay;
+    uint256 endDay;
     uint256 weight;
 }
 
@@ -31,7 +33,6 @@ contract Staking is AccessControl, ERC20 {
     IERC20Mintable public plasmaContract;
 
     bytes32 public constant ADMIN = keccak256('ADMIN');
-    uint256 public constant BLOCKS_PER_DAY = 6300;
 
     uint256 public plasmaClaimedTillNow;
     uint256 public possibleTotalPlasmaPoints;
@@ -70,12 +71,10 @@ contract Staking is AccessControl, ERC20 {
     constructor(
         address _admin,
         address _lpToken,
-        address _plasmaContract,
         uint256 _withdrawBufferTime
     ) ERC20('Staking Shares', 'SHRS') {
         _setupRole(ADMIN, _admin);
         lpToken = IERC20(_lpToken);
-        plasmaContract = IERC20Mintable(_plasmaContract);
         startTime = block.timestamp;
         withdrawBufferTime = _withdrawBufferTime.mul(1 days);
         totalLpTokenLockedInThisContractLastUpdatedAt = block.timestamp;
@@ -101,9 +100,6 @@ contract Staking is AccessControl, ERC20 {
         uint256 _currentBalance = balanceOf(msg.sender);
         uint256 possiblePlasmaPoints = possiblePlasmaPointsCurrentMonth();
         uint256 plasmaToGenerate = (possiblePlasmaPoints.sub(plasmaClaimedTillNow)).mul(_currentBalance).div(balanceOf(deadAccount));
-        // A = possiblePlasmaPoints - plasmaClaimedTillNow; 
-        // B = A * currentBalance;
-        // C = B / balanceOf(deadAccount);
         require(possiblePlasmaPoints >= plasmaClaimedTillNow.add(plasmaToGenerate), "Can't mint more than current month permits");
 
         plasmaClaimedTillNow = plasmaClaimedTillNow.add(plasmaToGenerate);
@@ -130,15 +126,16 @@ contract Staking is AccessControl, ERC20 {
     function depositUfoLocked(address _to, uint256 _amount, uint256 _month) public returns (bool) {
         require(_month == 1 || _month == 3 || _month == 9 || _month == 21, 'month is not valid');
         uint256 weight;
-        uint256 blockCount = block.number + BLOCKS_PER_DAY.mul(30).mul(_month);
-
+        uint256 currentDay = getCurrentDay();
+        uint256 endDay = currentDay.add(_month.mul(30));
+ 
         if      (_month == 1)  { weight = 125; }
         else if (_month == 3)  { weight = 150; }
         else if (_month == 9)  { weight = 200; }
         else if (_month == 21) { weight = 300; }
 
         totalWeightedLocked += _amount.mul(weight);
-        lockedDeposit[msg.sender].push(Locked(_amount, weight, blockCount));
+        lockedDeposit[msg.sender].push(Locked(_amount, currentDay, endDay, weight));
         depositLpToken(_to, _amount);
         emit DepositUfoLocked(msg.sender, _month);
     }
@@ -155,10 +152,11 @@ contract Staking is AccessControl, ERC20 {
     function withdrawAmount() public {
         uint256 lockedAmount;
         uint256 startIndex = lockedDepositIndex[msg.sender];
+        uint256 currentDay = getCurrentDay();
 
         for (uint256 i = startIndex; i < lockedDeposit[msg.sender].length; i++) {
             Locked memory deposit = lockedDeposit[msg.sender][i];
-            if (block.number >= deposit.blockCount) {
+            if (currentDay >= deposit.endDay) {
                 lockedAmount += deposit.amount;
                 totalWeightedLocked -= deposit.amount;
                 lockedDepositIndex[msg.sender]++;
@@ -175,18 +173,37 @@ contract Staking is AccessControl, ERC20 {
      */
     function withdrawReward() public {
         uint256 rewardAmount;
+        uint256 daysPassed;
         uint256 startIndex = lockedDepositIndex[msg.sender];
+        uint256 currentDay = getCurrentDay();
 
         for (uint256 i = startIndex; i < lockedDeposit[msg.sender].length; i++) {
             Locked memory deposit = lockedDeposit[msg.sender][i];
-            if (block.number >= deposit.blockCount) {
-                rewardAmount += deposit.amount.div(totalWeightedLocked);
-                lockedDepositIndex[msg.sender]++;
-            }
+            daysPassed = currentDay.sub(deposit.startDay);
+            if (daysPassed == 0) continue;
+            rewardAmount += deposit.amount.div(totalWeightedLocked).div(daysPassed);
+            lockedDepositIndex[msg.sender]++;
+            deposit.startDay = currentDay;
         }
 
         plasmaContract.transferFrom(address(this), msg.sender, rewardAmount);
         emit WithdrawReward(msg.sender, rewardAmount);
+    }
+
+    function getRewardAmount(address _address) public view returns (uint256) {
+        uint256 rewardAmount;
+        uint256 daysPassed;
+        uint256 startIndex = lockedDepositIndex[_address];
+        uint256 currentDay = getCurrentDay();
+
+        for (uint256 i = startIndex; i < lockedDeposit[_address].length; i++) {
+            Locked memory deposit = lockedDeposit[_address][i];
+            daysPassed = currentDay.sub(deposit.startDay);
+            if (daysPassed == 0) continue;
+            rewardAmount += deposit.amount.div(totalWeightedLocked).div(daysPassed);
+        }
+
+        return rewardAmount;
     }
 
     // --- PUBLIC MODIFIER ---
@@ -201,6 +218,12 @@ contract Staking is AccessControl, ERC20 {
     }
 
     // --- PUBLIC VIEW ---
+
+    function getCurrentDay() public view returns (uint256) {
+        uint256 _ts = block.timestamp;
+        uint256 _day = (_ts.sub(startTime)).div(1 days);
+        return _day;
+    }
 
     function getCurrentMonth() public view returns (uint256) {
         uint256 _ts = block.timestamp;
@@ -278,9 +301,8 @@ contract Staking is AccessControl, ERC20 {
 
     // assumption: we assume that plasma points are not modifyable after month complete
     function updatePlasmaPointsPerMonth(uint256 _month, uint256 _points) external onlyAdmin {
-        uint256 _ts = block.timestamp;
-        uint256 _current_month = (_ts.sub(startTime)).div(30 days);
-        require(_month >= _current_month, 'Cannot update plasma points of the past');
+        uint256 current_month = getCurrentMonth();
+        require(_month >= current_month, 'Cannot update plasma points of the past');
         require(_points > maxRewardPerMonth[_month], 'Can not decrease the plasma points during update');
 
         possibleTotalPlasmaPoints = possibleTotalPlasmaPoints.add(_points).sub(maxRewardPerMonth[_month]);
