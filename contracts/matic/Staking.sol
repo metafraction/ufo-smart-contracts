@@ -13,9 +13,10 @@ struct Deposit {
 }
 
 struct Locked {
-    uint256 amount;
-    uint256 blockCount;
-    uint256 weight;
+  uint256 amount;
+  uint256 weight;
+  uint256 withdrawTimestamp;
+  uint256 depositTimestamp;
 }
 
 struct WithdrawalRequest {
@@ -123,14 +124,24 @@ contract Staking is AccessControl, ERC20 {
         _deposit(_to, _amount);
     }
 
+      function getLockedDeposit(address _address) public view returns (Locked[] memory) {
+        uint256 length = lockedDepositIndex[_address];
+        Locked[] memory lLockedDeposits = new Locked[](length);
+        for (uint256 i = 0; i < length; i++) {
+          Locked storage lLockedDeposit = lockedDeposit[_address][i];
+          lLockedDeposits[i] = lLockedDeposit;
+        }
+        return lLockedDeposits;
+      }
+
     /**
-     * @dev deposit ufo token with a locking period, set blockCount to minimum unlocking period,
+     * @dev deposit ufo token with a locking period, set withdrawTimestamp to minimum unlocking period,
      * set weight based on month, push locking period into lockedDeposit mapping, and call depositLpToken
      */
     function depositUfoLocked(address _to, uint256 _amount, uint256 _month) public returns (bool) {
         require(_month == 1 || _month == 3 || _month == 9 || _month == 21, 'month is not valid');
         uint256 weight;
-        uint256 blockCount = block.number + BLOCKS_PER_DAY.mul(30).mul(_month);
+        uint256 withdrawTimestamp = block.timestamp + BLOCKS_PER_DAY.mul(86400).mul(30).mul(_month);
 
         if      (_month == 1)  { weight = 125; }
         else if (_month == 3)  { weight = 150; }
@@ -138,7 +149,7 @@ contract Staking is AccessControl, ERC20 {
         else if (_month == 21) { weight = 300; }
 
         totalWeightedLocked += _amount.mul(weight);
-        lockedDeposit[msg.sender].push(Locked(_amount, weight, blockCount));
+        lockedDeposit[msg.sender].push(Locked(_amount, weight, withdrawTimestamp, block.timestamp));
         depositLpToken(_to, _amount);
         emit DepositUfoLocked(msg.sender, _month);
     }
@@ -158,7 +169,7 @@ contract Staking is AccessControl, ERC20 {
 
         for (uint256 i = startIndex; i < lockedDeposit[msg.sender].length; i++) {
             Locked memory deposit = lockedDeposit[msg.sender][i];
-            if (block.number >= deposit.blockCount) {
+            if (block.timestamp >= deposit.withdrawTimestamp) {
                 lockedAmount += deposit.amount;
                 totalWeightedLocked -= deposit.amount;
                 lockedDepositIndex[msg.sender]++;
@@ -179,7 +190,7 @@ contract Staking is AccessControl, ERC20 {
 
         for (uint256 i = startIndex; i < lockedDeposit[msg.sender].length; i++) {
             Locked memory deposit = lockedDeposit[msg.sender][i];
-            if (block.number >= deposit.blockCount) {
+            if (block.timestamp >= deposit.withdrawTimestamp) {
                 rewardAmount += deposit.amount.div(totalWeightedLocked);
                 lockedDepositIndex[msg.sender]++;
             }
