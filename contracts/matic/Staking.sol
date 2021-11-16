@@ -129,7 +129,7 @@ contract Staking is AccessControl, ERC20 {
         else if (_month == 9)  { weight = 200; }
         else if (_month == 21) { weight = 300; }
 
-        totalWeightedLocked += _amount.mul(weight).div(100);
+        totalWeightedLocked = totalWeightedLocked.add(_amount.mul(weight).div(100));
         lockedDeposit[msg.sender].push(Locked(_amount, currentDay, endDay, weight));
         lpToken.safeTransferFrom(msg.sender, address(this), _amount);
         emit DepositUfoLocked(msg.sender, _month);
@@ -150,7 +150,7 @@ contract Staking is AccessControl, ERC20 {
         Locked memory deposit = lockedDeposit[msg.sender][index];
         if (getCurrentDay() >= deposit.endDay && deposit.amount > 0) {
             lockedAmount = deposit.amount;
-            totalWeightedLocked -= lockedAmount;
+            totalWeightedLocked = totalWeightedLocked.sub(lockedAmount);
             deposit.amount = 0;
             lpToken.safeTransferFrom(address(this), msg.sender, lockedAmount);
             emit WithdrawAmount(msg.sender, lockedAmount);
@@ -171,12 +171,12 @@ contract Staking is AccessControl, ERC20 {
             Locked memory deposit = lockedDeposit[msg.sender][i];
             daysPassed = currentDay.sub(deposit.startDay);
             if (daysPassed == 0) continue;
-            rewardAmount += deposit.amount.mul(deposit.weight.div(100));
+            rewardAmount = rewardAmount.add(deposit.amount.mul(deposit.weight.div(100)));
             if (currentDay > deposit.endDay) {
                 uint256 daysPassedEndDay = currentDay.sub(deposit.endDay);
-                rewardAmount += deposit.amount.div(totalWeightedLocked).div(daysPassed);
+                rewardAmount = rewardAmount.add(deposit.amount.div(totalWeightedLocked).div(daysPassed));
             }
-            rewardAmount += rewardAmount.div(totalWeightedLocked).div(daysPassed);
+            rewardAmount = rewardAmount.add(rewardAmount.div(totalWeightedLocked).div(daysPassed));
             lockedDepositIndex[msg.sender]++;
             deposit.startDay = currentDay;
         }
@@ -195,7 +195,7 @@ contract Staking is AccessControl, ERC20 {
             Locked memory deposit = lockedDeposit[_address][i];
             daysPassed = currentDay.sub(deposit.startDay);
             if (daysPassed == 0) continue;
-            rewardAmount += deposit.amount.div(totalWeightedLocked).div(daysPassed);
+            rewardAmount = rewardAmount.add(deposit.amount.div(totalWeightedLocked).div(daysPassed));
         }
 
         return rewardAmount;
