@@ -174,7 +174,7 @@ contract Staking is AccessControl, ERC20 {
             rewardAmount = rewardAmount.add(deposit.amount.mul(deposit.weight.div(100)));
             if (currentDay > deposit.endDay) {
                 uint256 daysPassedEndDay = currentDay.sub(deposit.endDay);
-                rewardAmount = rewardAmount.add(deposit.amount.div(totalWeightedLocked).div(daysPassed));
+                rewardAmount = rewardAmount.add(deposit.amount);
             }
             rewardAmount = rewardAmount.add(rewardAmount.div(totalWeightedLocked).div(daysPassed));
             lockedDepositIndex[msg.sender]++;
