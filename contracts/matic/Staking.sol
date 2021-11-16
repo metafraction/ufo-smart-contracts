@@ -124,7 +124,7 @@ contract Staking is AccessControl, ERC20 {
         uint256 endDay = currentDay.add(_month.mul(30));
  
         if      (_month == 0)  { weight = 100; }
-        else if (_month == 3)  { weight = 125; }
+        else if (_month == 1)  { weight = 125; }
         else if (_month == 3)  { weight = 150; }
         else if (_month == 9)  { weight = 200; }
         else if (_month == 21) { weight = 300; }
