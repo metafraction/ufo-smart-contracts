@@ -110,33 +110,28 @@ contract Staking is AccessControl, ERC20 {
         emit ClaimPlasma(_to, plasmaToGenerate);
     }
 
-    function depositLpToken(address _to, uint256 _amount) public {
-        require(_to != address(0), 'address can not be address(0)');
-        require(_amount != 0, 'amount must be greater than 0');
-        require(lpToken.balanceOf(msg.sender) >= _amount, 'user balance must be greater than or equal to amount');
-
-        lpToken.safeTransferFrom(msg.sender, address(this), _amount);
-        _deposit(_to, _amount);
-    }
-
     /**
      * @dev deposit ufo token with a locking period, set blockCount to minimum unlocking period,
      * set weight based on month, push locking period into lockedDeposit mapping, and call depositLpToken
      */
     function depositUfoLocked(address _to, uint256 _amount, uint256 _month) public returns (bool) {
-        require(_month == 1 || _month == 3 || _month == 9 || _month == 21, 'month is not valid');
+        require(_month == 0 || _month == 1 || _month == 3 || _month == 9 || _month == 21, 'month is not valid');
+        require(_to != address(0), 'address can not be address(0)');
+        require(_amount != 0, 'amount must be greater than 0');
+        require(lpToken.balanceOf(msg.sender) >= _amount, 'user balance must be greater than or equal to amount');
         uint256 weight;
         uint256 currentDay = getCurrentDay();
         uint256 endDay = currentDay.add(_month.mul(30));
  
-        if      (_month == 1)  { weight = 125; }
+        if      (_month == 0)  { weight = 100; }
+        else if (_month == 3)  { weight = 125; }
         else if (_month == 3)  { weight = 150; }
         else if (_month == 9)  { weight = 200; }
         else if (_month == 21) { weight = 300; }
 
-        totalWeightedLocked += _amount.mul(weight);
+        totalWeightedLocked += _amount.mul(weight).div(100);
         lockedDeposit[msg.sender].push(Locked(_amount, currentDay, endDay, weight));
-        depositLpToken(_to, _amount);
+        lpToken.safeTransferFrom(msg.sender, address(this), _amount);
         emit DepositUfoLocked(msg.sender, _month);
     }
 
@@ -149,22 +144,17 @@ contract Staking is AccessControl, ERC20 {
      * @dev withdraw the orignal amount that was staked after the locking period is over, also account for when
      * multiple deposit transactions take place
      */
-    function withdrawAmount() public {
+    function withdrawAmount(uint256 index) public {
         uint256 lockedAmount;
-        uint256 startIndex = lockedDepositIndex[msg.sender];
-        uint256 currentDay = getCurrentDay();
 
-        for (uint256 i = startIndex; i < lockedDeposit[msg.sender].length; i++) {
-            Locked memory deposit = lockedDeposit[msg.sender][i];
-            if (currentDay >= deposit.endDay) {
-                lockedAmount += deposit.amount;
-                totalWeightedLocked -= deposit.amount;
-                lockedDepositIndex[msg.sender]++;
-            }
+        Locked memory deposit = lockedDeposit[msg.sender][index];
+        if (getCurrentDay() >= deposit.endDay && deposit.amount > 0) {
+            lockedAmount = deposit.amount;
+            totalWeightedLocked -= lockedAmount;
+            deposit.amount = 0;
+            lpToken.safeTransferFrom(address(this), msg.sender, lockedAmount);
+            emit WithdrawAmount(msg.sender, lockedAmount);
         }
-
-        lpToken.safeTransferFrom(address(this), msg.sender, lockedAmount);
-        emit WithdrawAmount(msg.sender, lockedAmount);
     }
 
     /**
@@ -181,7 +171,12 @@ contract Staking is AccessControl, ERC20 {
             Locked memory deposit = lockedDeposit[msg.sender][i];
             daysPassed = currentDay.sub(deposit.startDay);
             if (daysPassed == 0) continue;
-            rewardAmount += deposit.amount.div(totalWeightedLocked).div(daysPassed);
+            rewardAmount += deposit.amount.mul(deposit.weight.div(100));
+            if (currentDay > deposit.endDay) {
+                uint256 daysPassedEndDay = currentDay.sub(deposit.endDay);
+                rewardAmount += deposit.amount.div(totalWeightedLocked).div(daysPassed);
+            }
+            rewardAmount += rewardAmount.div(totalWeightedLocked).div(daysPassed);
             lockedDepositIndex[msg.sender]++;
             deposit.startDay = currentDay;
         }
