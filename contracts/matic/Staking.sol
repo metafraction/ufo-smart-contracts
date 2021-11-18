@@ -25,7 +25,7 @@ struct WithdrawalRequest {
   uint256 releaseTime;
 }
 
-contract Staking is AccessControl, ERC20 {
+contract Staking is AccessControl {
   using SafeMath for uint256;
   using SafeERC20 for IERC20;
 
@@ -50,8 +50,7 @@ contract Staking is AccessControl, ERC20 {
   mapping(address => uint256) public withdrawRequestCount;
   mapping(address => Locked[]) public lockedDeposit;
 
-  mapping(address => mapping(uint256 => WithdrawalRequest))
-    public withdrawRequests;
+  mapping(address => mapping(uint256 => WithdrawalRequest)) public withdrawRequests;
 
   // @modify: modify with a proper variable name. the addresses should be a random
   address deadAccount = 0x000000000000000000000000000000000000dEaD;
@@ -63,25 +62,16 @@ contract Staking is AccessControl, ERC20 {
   event DepositUfoLocked(address indexed _from, uint256 indexed _month);
   event SetPlasmaContract(address indexed _plasmaContract);
   event UpdatePlasmaPointsForMonth(uint256 indexed _month, uint256 points);
-  event Withdraw(
-    address indexed _from,
-    address to,
-    uint256 _requestCount,
-    uint256 _amount
-  );
+  event Withdraw(address indexed _from, address to, uint256 _requestCount, uint256 _amount);
   event WithdrawAmount(address indexed _to, uint256 _amount);
   event WithdrawReward(address indexed _to, uint256 _amount);
-  event WithdrawlRequestForLpTokens(
-    address indexed _from,
-    uint256 _requestCount,
-    uint256 _amount
-  );
+  event WithdrawlRequestForLpTokens(address indexed _from, uint256 _requestCount, uint256 _amount);
 
   constructor(
     address _admin,
     address _lpToken,
     uint256 _withdrawBufferTime
-  ) ERC20('Staking Shares', 'SHRS') {
+  ) {
     _setupRole(ADMIN, _admin);
     lpToken = IERC20(_lpToken);
     startTime = block.timestamp;
@@ -96,38 +86,7 @@ contract Staking is AccessControl, ERC20 {
     _;
   }
 
-  modifier onlyIfAmountIsLeft(uint256 _amount) {
-    uint256 _amountRemaining = lpTokensLocked[msg.sender].sub(
-      totalLpTokensInWithdrawlRequests[msg.sender]
-    );
-    require(
-      _amountRemaining >= _amount,
-      'no remaining token left to place withdraw request'
-    );
-    _;
-  }
-
   // --- PUBLIC ---
-
-  function claimPlasma(address _to) public {
-    _deposit(msg.sender, 0);
-    uint256 _currentBalance = balanceOf(msg.sender);
-    uint256 possiblePlasmaPoints = possiblePlasmaPointsCurrentMonth();
-    uint256 plasmaToGenerate = (possiblePlasmaPoints.sub(plasmaClaimedTillNow))
-      .mul(_currentBalance)
-      .div(balanceOf(deadAccount));
-    require(
-      possiblePlasmaPoints >= plasmaClaimedTillNow.add(plasmaToGenerate),
-      "Can't mint more than current month permits"
-    );
-
-    plasmaClaimedTillNow = plasmaClaimedTillNow.add(plasmaToGenerate);
-    plasmaContract.mint(_to, plasmaToGenerate);
-
-    _burn(msg.sender, _currentBalance);
-    _burn(deadAccount, _currentBalance);
-    emit ClaimPlasma(_to, plasmaToGenerate);
-  }
 
   /**
    * @dev deposit ufo token with a locking period, set blockCount to minimum unlocking period,
@@ -138,16 +97,10 @@ contract Staking is AccessControl, ERC20 {
     uint256 _amount,
     uint256 _month
   ) public returns (bool) {
-    require(
-      _month == 0 || _month == 1 || _month == 3 || _month == 9 || _month == 21,
-      'month is not valid'
-    );
+    require(_month == 0 || _month == 1 || _month == 3 || _month == 9 || _month == 21, 'month is not valid');
     require(_to != address(0), 'address can not be address(0)');
     require(_amount != 0, 'amount must be greater than 0');
-    require(
-      lpToken.balanceOf(msg.sender) >= _amount,
-      'user balance must be greater than or equal to amount'
-    );
+    require(lpToken.balanceOf(msg.sender) >= _amount, 'user balance must be greater than or equal to amount');
     uint256 weight;
     uint256 currentDay = getCurrentDay();
     uint256 endDay = currentDay.add(_month.mul(30));
@@ -165,9 +118,7 @@ contract Staking is AccessControl, ERC20 {
     }
 
     totalWeightedLocked = totalWeightedLocked.add(_amount.mul(weight).div(100));
-    lockedDeposit[msg.sender].push(
-      Locked(_amount, currentDay, endDay, weight, currentDay)
-    );
+    lockedDeposit[msg.sender].push(Locked(_amount, currentDay, endDay, weight, currentDay));
     lpToken.safeTransferFrom(msg.sender, address(this), _amount);
     _deposit(_to, _amount);
     emit DepositUfoLocked(msg.sender, _month);
@@ -216,7 +167,8 @@ contract Staking is AccessControl, ERC20 {
     }
 
     plasmaClaimedTillNow = plasmaClaimedTillNow.add(rewardAmount);
-    plasmaContract.transferFrom(address(this), msg.sender, rewardAmount);
+
+    plasmaContract.mint(msg.sender, rewardAmount);
     emit WithdrawReward(msg.sender, rewardAmount);
   }
 
@@ -224,9 +176,7 @@ contract Staking is AccessControl, ERC20 {
     uint256 rewardAmount;
     uint256 daysPassed;
     uint256 currentDay = getCurrentDay();
-    uint256 availablePlasmaToHarvest = possibleTotalPlasmaPoints.sub(
-      plasmaClaimedTillNow
-    );
+    uint256 availablePlasmaToHarvest = possibleTotalPlasmaPoints.sub(plasmaClaimedTillNow);
     for (uint256 i = 0; i < lockedDeposit[_address].length; i++) {
       Locked memory deposit = lockedDeposit[_address][i];
       if (deposit.amount == 0) continue;
@@ -234,33 +184,14 @@ contract Staking is AccessControl, ERC20 {
       daysPassed = currentDay.sub(deposit.lastWithdrawalDay);
       if (daysPassed == 0) continue;
 
-      uint256 stakeDays = deposit.endDay.sub(deposit.lastWithdrawalDay);
       if (currentDay > deposit.endDay) {
+        uint256 stakeDays = deposit.endDay.sub(deposit.lastWithdrawalDay);
         uint256 additionalDays = currentDay.sub(deposit.endDay);
-        rewardAmount.add(
-          deposit
-            .amount
-            .mul(deposit.weight.div(100))
-            .mul(availablePlasmaToHarvest.div(30))
-            .mul(stakeDays)
-            .div(totalWeightedLocked)
-        ); // Weightx for staked days
-        rewardAmount.add(
-          deposit
-            .amount
-            .mul(availablePlasmaToHarvest.div(30))
-            .mul(additionalDays)
-            .div(totalWeightedLocked)
-        ); // 1x for remaining days
+        rewardAmount.add(deposit.amount.mul(deposit.weight.div(100)).mul(availablePlasmaToHarvest.div(30)).mul(stakeDays).div(totalWeightedLocked)); // Weightx for staked days
+        rewardAmount.add(deposit.amount.mul(availablePlasmaToHarvest.div(30)).mul(additionalDays).div(totalWeightedLocked)); // 1x for remaining days
       } else {
-        rewardAmount.add(
-          deposit
-            .amount
-            .mul(deposit.weight.div(100))
-            .mul(availablePlasmaToHarvest.div(30))
-            .mul(stakeDays)
-            .div(totalWeightedLocked)
-        ); // weightx for the number of days staked.
+        uint256 stakeDays = currentDay.sub(deposit.lastWithdrawalDay);
+        rewardAmount.add(deposit.amount.mul(deposit.weight.div(100)).mul(availablePlasmaToHarvest.div(30)).mul(stakeDays).div(totalWeightedLocked)); // weightx for the number of days staked.
       }
     }
 
@@ -268,13 +199,6 @@ contract Staking is AccessControl, ERC20 {
   }
 
   // --- PUBLIC MODIFIER ---
-
-  function placeWithdrawRequest(uint256 _amount)
-    public
-    onlyIfAmountIsLeft(_amount)
-  {
-    _withdrawRequest(msg.sender, _amount);
-  }
 
   function setPlasmaContract(address _plasmaContract) public onlyAdmin {
     plasmaContract = IERC20Mintable(_plasmaContract);
@@ -304,100 +228,40 @@ contract Staking is AccessControl, ERC20 {
 
   function _deposit(address _to, uint256 _amount) internal {
     Deposit memory _d = lastDeposit[_to];
-    _mintForExistingWeight(_d, _to);
 
     lastDeposit[_to] = Deposit(_d.amount.add(_amount), block.timestamp);
     lpTokensLocked[_to] = lpTokensLocked[_to].add(_amount);
 
-    totalLpTokensLockedInThisContract = totalLpTokensLockedInThisContract.add(
-      _amount
-    );
+    totalLpTokensLockedInThisContract = totalLpTokensLockedInThisContract.add(_amount);
     totalLpTokenLockedInThisContractLastUpdatedAt = block.timestamp;
 
     emit DepositLpTokens(_to, _amount);
   }
 
-  function _mintForExistingWeight(Deposit memory _d, address _to) internal {
-    uint256 _existingWeight = _d.amount.mul(
-      block.timestamp.sub(_d.lastUpdated)
-    );
-    uint256 _existingTotalWeight = (
-      totalLpTokensLockedInThisContract.sub(
-        totalLpTokensInWithdrawlRequestsInThisContract
-      )
-    ).mul(block.timestamp.sub(totalLpTokenLockedInThisContractLastUpdatedAt));
-
-    if (_existingWeight != 0) {
-      _mint(_to, _existingWeight);
-    }
-
-    if (_existingTotalWeight != 0) {
-      _mint(deadAccount, _existingTotalWeight);
-    }
-  }
-
   function _withdraw(uint256 _requestCount, address _to) internal {
     WithdrawalRequest memory _w = withdrawRequests[msg.sender][_requestCount];
     require(_w.amount != 0, 'Invalid Withdrawl Request');
-    require(
-      block.timestamp > _w.releaseTime,
-      'Can withdraw only after deadline'
-    );
+    require(block.timestamp > _w.releaseTime, 'Can withdraw only after deadline');
 
     lpTokensLocked[msg.sender] = lpTokensLocked[msg.sender].sub(_w.amount);
-    totalLpTokensInWithdrawlRequests[
-      msg.sender
-    ] = totalLpTokensInWithdrawlRequests[msg.sender].sub(_w.amount);
-    totalLpTokensInWithdrawlRequestsInThisContract = totalLpTokensInWithdrawlRequestsInThisContract
-      .sub(_w.amount);
-    totalLpTokensLockedInThisContract = totalLpTokensLockedInThisContract.sub(
-      _w.amount
-    );
+    totalLpTokensInWithdrawlRequests[msg.sender] = totalLpTokensInWithdrawlRequests[msg.sender].sub(_w.amount);
+    totalLpTokensInWithdrawlRequestsInThisContract = totalLpTokensInWithdrawlRequestsInThisContract.sub(_w.amount);
+    totalLpTokensLockedInThisContract = totalLpTokensLockedInThisContract.sub(_w.amount);
 
     lpToken.safeTransfer(_to, _w.amount);
     emit Withdraw(msg.sender, _to, _requestCount, _w.amount);
     withdrawRequests[msg.sender][_requestCount].amount = 0;
   }
 
-  function _withdrawRequest(address _from, uint256 _amount) internal {
-    uint256 requestCount = withdrawRequestCount[_from].add(1);
-    Deposit memory _d = lastDeposit[_from];
-    _mintForExistingWeight(_d, _from);
-
-    lastDeposit[_from] = Deposit(_d.amount.sub(_amount), block.timestamp);
-    withdrawRequestCount[_from] = requestCount;
-    withdrawRequests[_from][requestCount] = WithdrawalRequest(
-      _amount,
-      block.timestamp.add(withdrawBufferTime)
-    );
-    totalLpTokensInWithdrawlRequests[
-      msg.sender
-    ] = totalLpTokensInWithdrawlRequests[msg.sender].add(_amount);
-
-    totalLpTokensInWithdrawlRequestsInThisContract = totalLpTokensInWithdrawlRequestsInThisContract
-      .add(_amount);
-    totalLpTokenLockedInThisContractLastUpdatedAt = block.timestamp;
-
-    emit WithdrawlRequestForLpTokens(_from, requestCount, _amount);
-  }
-
   // --- EXTERNAL ---
 
   // assumption: we assume that plasma points are not modifyable after month complete
-  function updatePlasmaPointsPerMonth(uint256 _month, uint256 _points)
-    external
-    onlyAdmin
-  {
+  function updatePlasmaPointsPerMonth(uint256 _month, uint256 _points) external onlyAdmin {
     uint256 current_month = getCurrentMonth();
     require(_month >= current_month, 'Cannot update plasma points of the past');
-    require(
-      _points > maxRewardPerMonth[_month],
-      'Can not decrease the plasma points during update'
-    );
+    require(_points > maxRewardPerMonth[_month], 'Can not decrease the plasma points during update');
 
-    possibleTotalPlasmaPoints = possibleTotalPlasmaPoints.add(_points).sub(
-      maxRewardPerMonth[_month]
-    );
+    possibleTotalPlasmaPoints = possibleTotalPlasmaPoints.add(_points).sub(maxRewardPerMonth[_month]);
     maxRewardPerMonth[_month] = _points;
     emit UpdatePlasmaPointsForMonth(_month, _points);
   }
