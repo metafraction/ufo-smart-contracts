@@ -215,6 +215,7 @@ contract Staking is AccessControl, ERC20 {
       deposit.lastWithdrawalDay = currentDay;
     }
 
+    plasmaClaimedTillNow = plasmaClaimedTillNow.add(rewardAmount);
     plasmaContract.transferFrom(address(this), msg.sender, rewardAmount);
     emit WithdrawReward(msg.sender, rewardAmount);
   }
@@ -223,7 +224,9 @@ contract Staking is AccessControl, ERC20 {
     uint256 rewardAmount;
     uint256 daysPassed;
     uint256 currentDay = getCurrentDay();
-    uint256 currentMonth = getCurrentMonth();
+    uint256 availablePlasmaToHarvest = possibleTotalPlasmaPoints.sub(
+      plasmaClaimedTillNow
+    );
     for (uint256 i = 0; i < lockedDeposit[_address].length; i++) {
       Locked memory deposit = lockedDeposit[_address][i];
       if (deposit.amount == 0) continue;
@@ -238,14 +241,14 @@ contract Staking is AccessControl, ERC20 {
           deposit
             .amount
             .mul(deposit.weight.div(100))
-            .mul(maxRewardPerMonth[currentMonth].div(30))
+            .mul(availablePlasmaToHarvest.div(30))
             .mul(stakeDays)
             .div(totalWeightedLocked)
         ); // Weightx for staked days
         rewardAmount.add(
           deposit
             .amount
-            .mul(maxRewardPerMonth[currentMonth].div(30))
+            .mul(availablePlasmaToHarvest.div(30))
             .mul(additionalDays)
             .div(totalWeightedLocked)
         ); // 1x for remaining days
@@ -254,7 +257,7 @@ contract Staking is AccessControl, ERC20 {
           deposit
             .amount
             .mul(deposit.weight.div(100))
-            .mul(maxRewardPerMonth[currentMonth].div(30))
+            .mul(availablePlasmaToHarvest.div(30))
             .mul(stakeDays)
             .div(totalWeightedLocked)
         ); // weightx for the number of days staked.
