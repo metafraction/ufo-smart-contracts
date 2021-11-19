@@ -188,8 +188,14 @@ contract Staking is AccessControl {
             if (currentDay > deposit.endDay) {
                 uint256 stakeDays = deposit.endDay.sub(deposit.lastWithdrawalDay);
                 uint256 additionalDays = currentDay.sub(deposit.endDay);
-                rewardAmount.add(deposit.amount.mul(deposit.weight.div(100)).mul(availablePlasmaToHarvest.div(30)).mul(stakeDays).div(totalWeightedLocked)); // Weightx for staked days
-                rewardAmount.add(deposit.amount.mul(availablePlasmaToHarvest.div(30)).mul(additionalDays).div(totalWeightedLocked)); // 1x for remaining days
+
+                // Formula -> Weighted average of the staked amount * (Available Plasma / Nbr contract days) * Nbr days staked
+                // Available Plasma -> Total Plasma Points - Plasma Claimed Till Now
+                // Weighted average of the staked amount -> Staked Amount * (Weight / 100) / total weighted staked
+                // Nbr contract days -> Total number of days the contract has been running
+                // Nbr days staked -> Number of days passed since last withdrawal
+                rewardAmount.add(deposit.amount.mul(deposit.weight.div(100)).mul(availablePlasmaToHarvest.div(currentDay)).mul(stakeDays).div(totalWeightedLocked)); // Weightx for staked days
+                rewardAmount.add(deposit.amount.mul(availablePlasmaToHarvest.div(currentDay)).mul(additionalDays).div(totalWeightedLocked)); // 1x for remaining days
             } else {
                 uint256 stakeDays = currentDay.sub(deposit.lastWithdrawalDay);
                 rewardAmount.add(deposit.amount.mul(deposit.weight.div(100)).mul(availablePlasmaToHarvest.div(30)).mul(stakeDays).div(totalWeightedLocked)); // weightx for the number of days staked.
