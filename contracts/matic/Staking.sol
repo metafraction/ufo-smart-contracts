@@ -18,7 +18,8 @@ struct Locked {
     uint256 startDay;
     uint256 endDay;
     uint256 weight;
-    uint256 lastWithdrawalDay;
+    uint256 withdrawalDay;
+    bool withdrawn;
 }
 
 struct WithdrawalRequest {
@@ -44,6 +45,7 @@ contract Staking is AccessControl {
     mapping(uint256 => uint256) public maxRewardPerMonth;
     mapping(address => uint256) public plasmaClaimedTillNow;
     mapping(address => Locked[]) public lockedDeposit;
+    mapping(address => uint256) public lastPlasmaClaimedDay;
 
     // Events
     event DepositUfoLocked(address indexed _from, uint256 indexed _month);
@@ -78,7 +80,6 @@ contract Staking is AccessControl {
         uint256 weight;
         uint256 currentDay = getCurrentDay();
         uint256 endDay = currentDay.add(_month.mul(30));
-
         if (_month == 0) {
             weight = 100;
         } else if (_month == 1) {
@@ -92,7 +93,8 @@ contract Staking is AccessControl {
         }
 
         totalWeightedLocked = totalWeightedLocked.add(_amount.mul(weight).div(100));
-        lockedDeposit[msg.sender].push(Locked(_amount, currentDay, endDay, weight, currentDay));
+        lockedDeposit[msg.sender].push(Locked(_amount, currentDay, endDay, weight, 0, false));
+        lastPlasmaClaimedDay[msg.sender] = currentDay;
         lpTokensLocked[msg.sender] = lpTokensLocked[msg.sender].add(_amount);
         totalLpTokensLockedInThisContract = totalLpTokensLockedInThisContract.add(_amount);
 
@@ -107,17 +109,23 @@ contract Staking is AccessControl {
     function withdrawAmount(uint256 index) public {
         uint256 lockedAmount;
 
-        Locked memory deposit = lockedDeposit[msg.sender][index];
-        if (getCurrentDay() >= deposit.endDay && deposit.amount > 0) {
-            lockedAmount = deposit.amount;
-            totalWeightedLocked = totalWeightedLocked.sub(lockedAmount.mul(deposit.weight).div(100));
-            totalLpTokensLockedInThisContract = totalLpTokensLockedInThisContract.sub(deposit.amount);
-            lpTokensLocked[msg.sender] = lpTokensLocked[msg.sender].sub(deposit.amount);
-            deposit.amount = 0;
-            lpToken.safeTransferFrom(address(this), msg.sender, lockedAmount);
+        Locked storage deposit = lockedDeposit[msg.sender][index];
+        require(!deposit.withdrawn, 'Stake already withdrawn');
 
-            emit WithdrawAmount(msg.sender, lockedAmount);
-        }
+        uint256 currentDay = getCurrentDay();
+        require(currentDay >= deposit.endDay, 'Stake cannot be withdrawn during the locking period');
+
+        lockedAmount = deposit.amount;
+        totalLpTokensLockedInThisContract = totalLpTokensLockedInThisContract.sub(deposit.amount);
+        totalWeightedLocked = totalWeightedLocked.sub(deposit.amount.mul(deposit.weight).div(100));
+        lpTokensLocked[msg.sender] = lpTokensLocked[msg.sender].sub(deposit.amount);
+
+        deposit.withdrawn = true;
+        deposit.withdrawalDay = currentDay;
+
+        lpToken.safeTransfer(msg.sender, lockedAmount);
+
+        emit WithdrawAmount(msg.sender, lockedAmount);
     }
 
     /**
@@ -129,56 +137,49 @@ contract Staking is AccessControl {
         require(rewardAmount > 0, 'No reward to withdraw');
 
         uint256 currentDay = getCurrentDay();
-        uint256 daysPassed;
 
-        for (uint256 i = 0; i < lockedDeposit[msg.sender].length; i++) {
-            Locked memory deposit = lockedDeposit[msg.sender][i];
-            if (deposit.amount == 0) continue;
-
-            daysPassed = currentDay.sub(deposit.lastWithdrawalDay);
-            if (daysPassed == 0) continue;
-            deposit.lastWithdrawalDay = currentDay;
-        }
-
+        lastPlasmaClaimedDay[msg.sender] = currentDay;
         plasmaClaimedTillNow[msg.sender] = plasmaClaimedTillNow[msg.sender].add(rewardAmount);
 
         plasmaContract.mint(msg.sender, rewardAmount);
+
         emit WithdrawReward(msg.sender, rewardAmount);
     }
 
     function getRewardAmount(address _address) public view returns (uint256) {
         uint256 rewardAmount;
-        uint256 daysPassed;
         uint256 currentDay = getCurrentDay();
         uint256 currentMonth = getCurrentMonth();
         uint256 availablePlasma = possibleTotalPlasmaPoints.div(currentMonth.add(1).mul(30)); // divide by nbr of days the plasma has been allotted
+
+        if (totalWeightedLocked == 0) return 0;
+
         for (uint256 i = 0; i < lockedDeposit[_address].length; i++) {
             Locked memory deposit = lockedDeposit[_address][i];
-            if (deposit.amount == 0) continue;
 
-            daysPassed = currentDay.sub(deposit.lastWithdrawalDay);
-            if (daysPassed == 0) continue;
+            uint256 currentDayToUseForCalculation;
+            if (deposit.withdrawn) {
+                currentDayToUseForCalculation = deposit.withdrawalDay;
+            } else {
+                currentDayToUseForCalculation = currentDay;
+            }
+
             uint256 weightedDeposit = deposit.amount.mul(deposit.weight).div(100);
 
-            if (currentDay > deposit.endDay) {
-                uint256 stakeDays = deposit.endDay.sub(deposit.lastWithdrawalDay);
-                uint256 additionalDays = currentDay.sub(deposit.endDay);
-
-                // Formula -> Weighted average of the staked amount * (Available Plasma / Nbr contract days) * Nbr days staked
-                // Available Plasma -> Total Plasma Points - Plasma Claimed Till Now
-                // Weighted average of the staked amount -> Staked Amount * (Weight / 100) / total weighted staked
-                // Nbr contract days -> Total number of days the contract has been running
-                // Nbr days staked -> Number of days passed since last withdrawal
+            if (currentDayToUseForCalculation > deposit.endDay) {
+                uint256 stakeDays = lastPlasmaClaimedDay[_address] > deposit.endDay ? 0 : deposit.endDay.sub(lastPlasmaClaimedDay[_address]);
+                uint256 additionalDays = currentDayToUseForCalculation.sub(deposit.endDay);
 
                 rewardAmount = rewardAmount.add(weightedDeposit.mul(availablePlasma).mul(stakeDays).div(totalWeightedLocked)); // weightx for the stake days
                 rewardAmount = rewardAmount.add(deposit.amount.mul(availablePlasma).mul(additionalDays).div(totalWeightedLocked)); // 1x for remaining days
             } else {
-                uint256 stakeDays = currentDay.sub(deposit.lastWithdrawalDay);
+                uint256 stakeDays = currentDayToUseForCalculation.sub(lastPlasmaClaimedDay[_address]);
                 rewardAmount = rewardAmount.add(weightedDeposit.mul(availablePlasma).mul(stakeDays).div(totalWeightedLocked)); // weightx for the number of days staked.
             }
         }
         uint256 claimedPlasma = plasmaClaimedTillNow[_address];
-        rewardAmount = rewardAmount.sub(claimedPlasma);
+
+        rewardAmount = claimedPlasma > rewardAmount ? 0 : rewardAmount.sub(claimedPlasma); // can happen if the user withdraws when very less people had staked, and on second day too many people stake.
 
         return rewardAmount;
     }
