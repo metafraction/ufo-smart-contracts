@@ -117,51 +117,6 @@ describe('Staking', function () {
                 const rewardAmount2 = await staking.getRewardAmount(admin.address)
                 expect(rewardAmount2).to.eq('0')
             })
-
-            it('does not accrue plasma once token is withdrawn on the second day', async () => {
-                const deposit = await staking.depositUfoLocked(BigNumber.from('100000000000000000000'), 0)
-                await deposit.wait()
-                await network.provider.send('evm_increaseTime', [86400])
-                await network.provider.send('evm_mine')
-                const rewardAmount = await staking.getRewardAmount(admin.address)
-                expect(rewardAmount).to.eq('333333333333333333333')
-
-                const withdraw = await staking.withdrawAmount(BigNumber.from(0))
-                await withdraw.wait()
-
-                await network.provider.send('evm_increaseTime', [86400])
-                await network.provider.send('evm_mine')
-
-                const rewardAmount2 = await staking.getRewardAmount(admin.address)
-                expect(rewardAmount2).to.eq('333333333333333333333')
-            })
-
-            it('does not accrue plasma once token is withdrawn on the second day & should be able to harvest the rewards from withdrawn funds if they were not harvested before', async () => {
-                const deposit = await staking.depositUfoLocked(BigNumber.from('100000000000000000000'), 0)
-                await deposit.wait()
-                await network.provider.send('evm_increaseTime', [86400])
-                await network.provider.send('evm_mine')
-                const rewardAmount = await staking.getRewardAmount(admin.address)
-                expect(rewardAmount).to.eq('333333333333333333333')
-
-                const withdraw = await staking.withdrawAmount(BigNumber.from(0))
-                await withdraw.wait()
-
-                await network.provider.send('evm_increaseTime', [86400])
-                await network.provider.send('evm_mine')
-
-                const harvest = await staking.withdrawReward()
-                await harvest.wait()
-
-                const rewardAmount2 = await staking.getRewardAmount(admin.address)
-                expect(rewardAmount2).to.eq('0')
-
-                await network.provider.send('evm_increaseTime', [86400])
-                await network.provider.send('evm_mine')
-
-                const rewardAmount3 = await staking.getRewardAmount(admin.address)
-                expect(rewardAmount3).to.eq('0')
-            })
         })
 
         describe('multiple stake', () => {
@@ -223,7 +178,7 @@ describe('Staking', function () {
                 expect(rewardAmount2).to.eq('333333333333333333333')
             })
 
-            it.only('does not accrue plasma once token is withdrawn on the second day', async () => {
+            it('does not accrue plasma once token is withdrawn on the second day', async () => {
                 const deposit = await staking.depositUfoLocked(BigNumber.from('100000000000000000000'), 0)
                 await deposit.wait()
 
