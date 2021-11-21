@@ -173,7 +173,7 @@ contract Staking is AccessControl {
                 rewardAmount = rewardAmount.add(weightedDeposit.mul(availablePlasma).mul(stakeDays).div(totalWeightedLocked)); // weightx for the stake days
                 rewardAmount = rewardAmount.add(deposit.amount.mul(availablePlasma).mul(additionalDays).div(totalWeightedLocked)); // 1x for remaining days
             } else {
-                uint256 stakeDays = currentDayToUseForCalculation.sub(lastPlasmaClaimedDay[_address]);
+                uint256 stakeDays = lastPlasmaClaimedDay[_address] > currentDayToUseForCalculation ? 0 : currentDayToUseForCalculation.sub(lastPlasmaClaimedDay[_address]);
                 rewardAmount = rewardAmount.add(weightedDeposit.mul(availablePlasma).mul(stakeDays).div(totalWeightedLocked)); // weightx for the number of days staked.
             }
         }
