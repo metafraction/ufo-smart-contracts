@@ -57,12 +57,20 @@ contract Staking is AccessControl {
     event WithdrawAmount     (address indexed _to, uint256 _amount, uint256 indexed _day);
     event WithdrawReward     (address indexed _to, uint256 _amount, uint256 indexed _day);
 
+    /**
+     * @notice Initializes contract and sets state variables.
+     * @param _admin Address admin account
+     * @param _lpToken Address of lptoken contract
+     */
     constructor(address _admin, address _lpToken) {
         _setupRole(ADMIN, _admin);
         lpToken = IERC20(_lpToken);
         startTime = block.timestamp;
     }
 
+    /**
+     * @notice Modifier that checks if caller is `admin`.
+     */
     modifier onlyAdmin() {
         require(hasRole(ADMIN, msg.sender), 'Only admin can call');
         _;
