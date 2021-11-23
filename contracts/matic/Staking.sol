@@ -80,6 +80,7 @@ contract Staking is AccessControl {
      * @notice Deposit ufo token with a locking period.
      * @param _amount Total ufo tokens locked
      * @param _month Integer value of month
+     *
      * Requirements:
      *
      * - `month` must be a valid month.
@@ -124,6 +125,7 @@ contract Staking is AccessControl {
     /**
      * @notice Withdraw each individual amount that was staked after the locking period is over.
      * @param _index Position of locked deposit
+     *
      * Requirements:
      *
      * - `withdrawn` must be false.
@@ -153,6 +155,7 @@ contract Staking is AccessControl {
 
     /**
      * @notice Withdraw the reward amount that is accumulated for all the deposits.
+     *
      * Requirements:
      *
      * - `rewardAmount` must be greater than 0.
@@ -328,6 +331,7 @@ contract Staking is AccessControl {
      * @notice Updates the plasma points for only current/future month.
      * @param _month Integer value of month
      * @param _points Plasma points
+     *
      * Requirements:
      *
      * - `month` must be greater than or equal to current month.
