@@ -25,19 +25,19 @@ contract Staking is AccessControl {
     uint256 public totalLpTokensLocked;
 
     // -- Mappings --
-    mapping(uint256 => uint256)  public maxRewardPerMonth;
-    mapping(address => uint256)  public plasmaClaimedTillNow;
-    mapping(address => uint256)  public lastPlasmaClaimedDay;
+    mapping(uint256 => uint256) public maxRewardPerMonth;
+    mapping(address => uint256) public plasmaClaimedTillNow;
+    mapping(address => uint256) public lastPlasmaClaimedDay;
     mapping(address => Locked[]) public lockedDeposit;
-    mapping(uint256 => uint256)  public totalWeightedLockedForTheDay;
-    mapping(address => uint256)  public lpTokensLocked;
+    mapping(uint256 => uint256) public totalWeightedLockedForTheDay;
+    mapping(address => uint256) public lpTokensLocked;
 
     /**
      * @notice Object that represents each locked deposit
      * `amount` Total ufo tokens locked
      * `startDay` Start timestamp of lock
      * `endDay` End timestamp of lock
-     * `weight` Integer value of month
+     * `weight` Multiplier of the lock
      * `withdrawalDay` Day of withdrawl
      * `withdrawn` Amount withdrawn
      */
@@ -51,11 +51,11 @@ contract Staking is AccessControl {
     }
 
     // Events
-    event DepositUfoLocked   (address indexed _from, uint256 indexed _month, uint256 _amount);
-    event SetPlasmaContract  (address indexed _contract);
-    event UpdatePlasmaPoints (uint256 indexed _month, uint256 points);
-    event WithdrawAmount     (address indexed _to, uint256 _amount, uint256 indexed _day);
-    event WithdrawReward     (address indexed _to, uint256 _amount, uint256 indexed _day);
+    event DepositUfoLocked(address indexed _from, uint256 indexed _month, uint256 _amount);
+    event SetPlasmaContract(address indexed _contract);
+    event UpdatePlasmaPoints(uint256 indexed _month, uint256 points);
+    event WithdrawAmount(address indexed _to, uint256 _amount, uint256 indexed _day);
+    event WithdrawReward(address indexed _to, uint256 _amount, uint256 indexed _day);
 
     /**
      * @notice Initializes contract and sets state variables.
@@ -77,8 +77,7 @@ contract Staking is AccessControl {
     }
 
     /**
-     * @notice Deposit ufo token with a locking period, set blockCount to minimum unlocking period,
-     * set weight based on month, push locking period into lockedDeposit mapping, and call depositLpToken.
+     * @notice Deposit ufo token with a locking period.
      * @param _amount Total ufo tokens locked
      * @param _month Integer value of month
      * Requirements:
@@ -89,7 +88,7 @@ contract Staking is AccessControl {
      *
      * Emits a {Transfer & DepositUfoLocked} event.
      */
-    function depositUfoLocked(uint256 _amount, uint256 _month) public returns (bool) {
+    function depositUfoLocked(uint256 _amount, uint256 _month) public {
         require(_amount != 0, 'depositUfoLocked: Amount must be greater than 0');
         require(_month == 0 || _month == 1 || _month == 3 || _month == 9 || _month == 21, 'depositUfoLocked: Month is not valid');
         require(lpToken.balanceOf(msg.sender) >= _amount, 'depositUfoLocked: User balance must be greater than or equal to amount');
@@ -127,7 +126,7 @@ contract Staking is AccessControl {
      * @param _index Position of locked deposit
      * Requirements:
      *
-     * - `withdrawn` deposit must be false.
+     * - `withdrawn` must be false.
      * - `currentDay` must be greater than or equal to deposit `endDay`.
      *
      * Emits a {Transfer & WithdrawAmount} event.
@@ -153,7 +152,7 @@ contract Staking is AccessControl {
     }
 
     /**
-     * @notice Withdraw the reward amount that is accumulated after the locking period.
+     * @notice Withdraw the reward amount that is accumulated for all the deposits.
      * Requirements:
      *
      * - `rewardAmount` must be greater than 0.
@@ -174,7 +173,8 @@ contract Staking is AccessControl {
 
     /**
      * @notice Gets the total reward amount for a given address.
-     * @param _address Address of reward account
+     * @param _address Address of reward amount being calculated
+     * @return Total reward amount
      */
     function getRewardAmount(address _address) public view returns (uint256) {
         uint256 rewardAmount;
@@ -185,119 +185,127 @@ contract Staking is AccessControl {
             Locked memory deposit = lockedDeposit[_address][i];
             uint256 weightedDeposit = deposit.amount.mul(deposit.weight).div(100);
 
-            if (currentDay < deposit.startDay) { continue; }
+            if (currentDay < deposit.startDay) {
+                continue;
+            }
 
             if (deposit.weight == 100) {
                 uint256 flexibleReward = getFlexibleReward(deposit, weightedDeposit, currentDay);
                 rewardAmount = rewardAmount.add(flexibleReward);
-                continue;
-            }
-
-            if (currentDay <= deposit.endDay) {
+            } else if (currentDay <= deposit.endDay) {
                 uint256 withinLockedReward = getWithinLockedReward(deposit, weightedDeposit, currentDay);
                 rewardAmount = rewardAmount.add(withinLockedReward);
-                continue;
+            } else {
+                uint256 outsideLockedReward = getOutsideLockedReward(deposit, weightedDeposit);
+                uint256 remainingReward = getRemainingReward(deposit, currentDay);
+                rewardAmount = rewardAmount.add(outsideLockedReward).add(remainingReward);
             }
-
-            uint256 outsideLockedReward = getOutsideLockedReward(deposit, weightedDeposit);
-            uint256 remainingReward = getRemainingReward(deposit, currentDay);
-            rewardAmount = rewardAmount.add(outsideLockedReward).add(remainingReward);
         }
 
         return rewardAmount.sub(plasmaClaimed);
     }
 
     /**
-     * @notice Gets flexible reward.
-     * @param _deposit Locked deposit object
+     * @notice Gets the reward for flexible deposit.
+     * @param _deposit Locked deposit struct
+     * @param _weightedDeposit Calculated amount of weighted deposit
      * @param _currentDay Integer value of current day
+     * @return flexibleReward
      */
-    function getFlexibleReward(Locked memory _deposit, uint256 _weightedDeposit, uint256 _currentDay) internal view returns (uint256 rewardAmount) {
-        uint256 flexibleReward;
+    function getFlexibleReward(
+        Locked memory _deposit,
+        uint256 _weightedDeposit,
+        uint256 _currentDay
+    ) internal view returns (uint256 flexibleReward) {
         uint256 flexEnd = _deposit.withdrawn ? _deposit.withdrawalDay : _currentDay;
         uint256 flexStart = _deposit.startDay;
-        uint256 twl = getTWL(flexStart);
 
         while (flexStart < flexEnd) {
             uint256 flexPD = maxRewardPerMonth[flexStart.div(30)].div(30);
+            uint256 twl = getTWL(flexStart);
             flexibleReward = flexibleReward.add(_weightedDeposit.mul(flexPD).div(twl));
             flexStart = flexStart.add(1);
         }
 
-        return rewardAmount.add(flexibleReward);
+        return flexibleReward;
     }
 
     /**
-     * @notice Gets within locked period reward (cannot be withdrawn during the locking period).
-     * @param _deposit Locked deposit object
+     * @notice Gets the reward for the locked deposit thats still locked.
+     * @param _deposit Locked deposit struct
      * @param _weightedDeposit Calculated amount of weighted deposit
      * @param _currentDay Integer value of current day
+     * @return withinLockedReward
      */
-    function getWithinLockedReward(Locked memory _deposit, uint256 _weightedDeposit, uint256 _currentDay) internal view returns (uint256 rewardAmount) {
-        uint256 withinLockedReward;
+    function getWithinLockedReward(
+        Locked memory _deposit,
+        uint256 _weightedDeposit,
+        uint256 _currentDay
+    ) internal view returns (uint256 withinLockedReward) {
         uint256 wlEnd = _currentDay;
         uint256 wlStart = _deposit.startDay;
-        uint256 twl = getTWL(wlStart);
 
         while (wlStart < wlEnd) {
             uint256 wlPD = maxRewardPerMonth[wlStart.div(30)].div(30);
+            uint256 twl = getTWL(wlStart);
             withinLockedReward = withinLockedReward.add(_weightedDeposit.mul(wlPD).div(twl));
             wlStart = wlStart.add(1);
         }
 
-        return rewardAmount.add(withinLockedReward);
+        return withinLockedReward;
     }
 
     /**
-     * @notice Gets outside locked period reward.
-     * @param _deposit Locked deposit object
+     * @notice Gets the reward for the available deposit of the locking period.
+     * @param _deposit Locked deposit struct
      * @param _weightedDeposit Calculated amount of weighted deposit
+     * @return outsideLockedReward
      */
-    function getOutsideLockedReward(Locked memory _deposit, uint256 _weightedDeposit) internal view returns (uint256 rewardAmount) {
-        uint256 outsideLockedReward;
+    function getOutsideLockedReward(Locked memory _deposit, uint256 _weightedDeposit) internal view returns (uint256 outsideLockedReward) {
         uint256 olEnd = _deposit.endDay;
         uint256 olStart = _deposit.startDay;
-        uint256 twl = getTWL(olStart);
 
         while (olStart < olEnd) {
             uint256 olPD = maxRewardPerMonth[olStart.div(30)].div(30);
+            uint256 twl = getTWL(olStart);
             outsideLockedReward = outsideLockedReward.add(_weightedDeposit.mul(olPD).div(twl));
             olStart = olStart.add(1);
         }
 
-        return rewardAmount.add(outsideLockedReward);
+        return outsideLockedReward;
     }
 
     /**
-     * @notice Gets remaining reward.
-     * @param _deposit Locked deposit object
+     * @notice Gets the reward for the available deposit of the remaining period.
+     * @param _deposit Locked deposit struct
      * @param _currentDay Integer value of current day
+     * @return remainingReward
      */
-    function getRemainingReward(Locked memory _deposit, uint256 _currentDay) internal view returns (uint256 rewardAmount) {
-        uint256 remainingReward;
+    function getRemainingReward(Locked memory _deposit, uint256 _currentDay) internal view returns (uint256 remainingReward) {
         uint256 remainingEnd = _deposit.withdrawn ? _deposit.withdrawalDay : _currentDay;
         uint256 remainingStart = _deposit.endDay; // end day is the start of the remaining period
-        uint256 twl = getTWL(remainingStart);
 
         while (remainingStart < remainingEnd) {
             uint256 remainingPD = maxRewardPerMonth[remainingStart.div(30)].div(30);
+            uint256 twl = getTWL(remainingStart);
             remainingReward = remainingReward.add(_deposit.amount.mul(100).mul(remainingPD).div(twl));
             remainingStart = remainingStart.add(1);
         }
 
-        return rewardAmount.add(remainingReward);
+        return remainingReward;
     }
 
     /**
      * @notice Gets the total amount of weighted locked.
      * @param _day Integer value of day
-     * return total weighted locked amount
+     * @return twl
      */
     function getTWL(uint256 _day) internal view returns (uint256 twl) {
         do {
             twl = totalWeightedLockedForTheDay[_day];
+            if (_day == 0) break;
             _day = _day.sub(1);
-        } while (twl == 0 && _day > 0);
+        } while (twl == 0);
 
         return twl;
     }
@@ -318,6 +326,8 @@ contract Staking is AccessControl {
 
     /**
      * @notice Updates the plasma points for only current/future month.
+     * @param _month Integer value of month
+     * @param _points Plasma points
      * Requirements:
      *
      * - `month` must be greater than or equal to current month.
@@ -341,7 +351,7 @@ contract Staking is AccessControl {
      * Emits a {SetPlasmaContract} event.
      */
     function setPlasmaContract(address _plasmaContract) public onlyAdmin {
-        IERC20Mintable(_plasmaContract);
+        plasmaContract = IERC20Mintable(_plasmaContract);
         emit SetPlasmaContract(_plasmaContract);
     }
 }
